@@ -1,0 +1,62 @@
+name: "Code scanning"
+
+# Run workflow each time code is pushed to your repository and on a schedule.
+# The scheduled workflow runs every at 00:00 on Sunday UTC time.
+on:
+  push:
+  schedule:
+  - cron: '0 0 * * 0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Mkdir results-dir
+      # make sure results dir is created
+      run: mkdir -p results-dir
+      
+    - name: Run KICS Scan with SARIF result
+      uses: fjsnogueira/kics-github-action@v1.4
+      with:
+        # comma separated list of paths
+        path: 'main.yml'
+        # when provided with a directory on output_path
+        # it will generate the specified reports file named 'results.{extension}'
+        # in this example it will generate:
+        # - results-dir/results.json
+        # - results-dir/results.sarif
+        secrets_regexes_path: secrets.json
+        output_path: results-dir
+        #platform_type: terraform
+        # Will exit with status code 0 even if results are found
+        ignore_on_exit: results
+        output_formats: 'json,sarif'
+        # exclude_paths: "terraform/gcp/big_data.tf,terraform/azure"
+        # look for the queries' ID in its metadata.json
+        # exclude_queries: 0437633b-daa6-4bbc-8526-c0d2443b946e
+    - name: Show results
+      run: |
+        cat results-dir/results.sarif
+        cat results-dir/results.json
+
+    # Captures results in the SARIF report as a check run
+    #- name: SARIF to Checks
+    #  uses: ./.github/actions/sarif-to-check-run
+    #  with:
+    #    sarif_file: results-dir/results.sarif
+    #  env:
+    #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Expose report
+      uses: actions/upload-artifact@v2
+      with:
+        name: SARIF results
+        path: results-dir/results.sarif
+
+    # Uploads results.sarif to GitHub repository using the upload-sarif action
+    - uses: github/codeql-action/upload-sarif@v1
+      with:
+        # Path to SARIF file relative to the root of the repository
+        sarif_file: results-dir/results.sarif
